@@ -8,14 +8,13 @@ import {
   Cell,
   Tooltip,
   Legend,
-  LineChart,
-  Line,
+  AreaChart,
+  Area,
   XAxis,
   YAxis,
   CartesianGrid,
 } from "recharts";
 import { Slider } from "./ui/slider";
-
 import { Input } from "./ui/input";
 import { Alert, AlertTitle, AlertDescription } from "./ui/alert";
 import { Info, AlertTriangle, ChevronDown, ChevronUp } from "lucide-react";
@@ -24,7 +23,7 @@ import {
   ChartConfig,
   ChartContainer,
   ChartTooltip,
-} from "@/components/ui/chart";
+} from "./ui/chart";
 
 interface DistributionData {
   percentage: number;
@@ -88,11 +87,17 @@ const TokenomicsPlanner = () => {
   );
 
   const generateUnlockSchedule = () => {
-    const months = 48;
-    const schedule = Array.from({ length: months + 1 }, (_, month) => ({
-      month,
+    const days = 48 * 30; // Convert months to days
+    const schedule = Array.from({ length: days + 1 }, (_, day) => ({
+      day,
       circulating: 0,
       rawCirculating: 0,
+      ...Object.fromEntries(
+        Object.keys(distribution).map((category) => [
+          category,
+          { circulating: 0, rawCirculating: 0 },
+        ]),
+      ),
     }));
 
     Object.entries(distribution).forEach(([category, data]) => {
@@ -100,14 +105,17 @@ const TokenomicsPlanner = () => {
       const tgeAmount = Math.floor((tokenAmount * data.tge) / 100);
       const remainingAmount = tokenAmount - tgeAmount;
 
-      const monthlyUnlock =
-        data.duration > 0 ? remainingAmount / data.duration : 0;
+      const daysInVesting = data.duration * 30; // Convert months to days
+      const dailyUnlock =
+        daysInVesting > 0 ? remainingAmount / daysInVesting : 0;
 
       schedule[0].rawCirculating += tgeAmount;
+      schedule[0][category].rawCirculating += tgeAmount;
 
-      if (data.duration > 0) {
-        for (let month = 1; month <= data.duration; month++) {
-          schedule[month].rawCirculating += monthlyUnlock;
+      if (daysInVesting > 0) {
+        for (let day = 1; day <= daysInVesting; day++) {
+          schedule[day].rawCirculating += dailyUnlock;
+          schedule[day][category].rawCirculating += dailyUnlock;
         }
       }
     });
@@ -117,9 +125,22 @@ const TokenomicsPlanner = () => {
       cumulative += point.rawCirculating;
       const actualCirculating = Math.min(cumulative, totalSupply);
       return {
-        month: point.month,
+        day: point.day,
         circulating: actualCirculating,
         percentCirculating: (actualCirculating / totalSupply) * 100,
+        ...Object.fromEntries(
+          Object.keys(distribution).map((category) => [
+            category,
+            {
+              circulating: Math.min(
+                point[category].rawCirculating,
+                totalSupply,
+              ),
+              percentCirculating:
+                (point[category].rawCirculating / totalSupply) * 100,
+            },
+          ]),
+        ),
       };
     });
   };
@@ -275,7 +296,6 @@ const TokenomicsPlanner = () => {
             </div>
           </CardTitle>
         </CardHeader>
-
         <CardContent className="pt-6">
           <div className="grid md:grid-cols-2 gap-8">
             {/* Left Column */}
@@ -465,49 +485,46 @@ const TokenomicsPlanner = () => {
                       </div>
                     </div>
 
-                    {expandedCategory === category && (
-                      <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-[#ffffff1a]">
-                        <div>
-                          <label className="text-sm text-gray-300">
-                            TGE Unlock %
-                          </label>
-                          <Input
-                            type="number"
-                            value={data.tge}
-                            onChange={(e) =>
-                              handleDistributionChange(
-                                category,
-                                "tge",
-
-                                Number(e.target.value),
-                              )
-                            }
-                            className="mt-1 bg-[#2a2333] border-[#ffffff1a] text-white"
-                            min="0"
-                            max="100"
-                            step="0.1"
-                          />
-                        </div>
-                        <div>
-                          <label className="text-sm text-gray-300">
-                            Vesting Duration (months)
-                          </label>
-                          <Input
-                            type="number"
-                            value={data.duration}
-                            onChange={(e) =>
-                              handleDistributionChange(
-                                category,
-                                "duration",
-                                Number(e.target.value),
-                              )
-                            }
-                            className="mt-1 bg-[#2a2333] border-[#ffffff1a] text-white"
-                            min="0"
-                          />
-                        </div>
+                    <div className="grid grid-cols-2 gap-4 mt-4 pt-4 border-t border-[#ffffff1a]">
+                      <div>
+                        <label className="text-sm text-gray-300">
+                          TGE Unlock %
+                        </label>
+                        <Input
+                          type="number"
+                          value={data.tge}
+                          onChange={(e) =>
+                            handleDistributionChange(
+                              category,
+                              "tge",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="mt-1 bg-[#2a2333] border-[#ffffff1a] text-white"
+                          min="0"
+                          max="100"
+                          step="0.1"
+                        />
                       </div>
-                    )}
+                      <div>
+                        <label className="text-sm text-gray-300">
+                          Vesting Duration (months)
+                        </label>
+                        <Input
+                          type="number"
+                          value={data.duration}
+                          onChange={(e) =>
+                            handleDistributionChange(
+                              category,
+                              "duration",
+                              Number(e.target.value),
+                            )
+                          }
+                          className="mt-1 bg-[#2a2333] border-[#ffffff1a] text-white"
+                          min="0"
+                        />
+                      </div>
+                    </div>
                   </div>
                 ))}
               </div>
@@ -570,12 +587,12 @@ const TokenomicsPlanner = () => {
                           </Pie>
                           <Tooltip
                             content={({ payload }) => {
-                              if (payload && payload[0]) {
+                              if (payload && payload.length > 0) {
                                 return (
                                   <div className="bg-white rounded-lg p-2 shadow-lg border border-gray-100">
                                     <div className="text-[#14101b] font-medium">
                                       {payload[0].name}:{" "}
-                                      {payload[0].value.toFixed(1)}%
+                                      {payload[0].value ? Number(payload[0].value).toFixed(1) : 'N/A'}%
                                     </div>
                                   </div>
                                 );
@@ -608,81 +625,32 @@ const TokenomicsPlanner = () => {
                         Shows cumulative circulating supply percentage over time
                       </div>
                       <div className="flex flex-col items-center">
-                        <LineChart
+                        <AreaChart
                           width={500}
                           height={350}
                           data={unlockSchedule}
-                          margin={{ top: 20, right: 40, left: 40, bottom: 40 }}
+                          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
                         >
-                          <CartesianGrid
-                            strokeDasharray="3 3"
-                            strokeOpacity={0.1}
-                            stroke="rgba(255, 255, 255, 0.2)"
+                          <CartesianGrid strokeDasharray="3 3" />
+                          <XAxis 
+                            dataKey="day" 
+                            label={{ value: 'Days after TGE', position: 'insideBottom', offset: -5 }}
                           />
-                          <XAxis
-                            dataKey="month"
-                            label={{
-                              value: "Months after TGE",
-                              position: "bottom",
-                              offset: 20,
-                              style: {
-                                fontSize: 11,
-                                fill: "rgba(255, 255, 255, 0.7)",
-                              },
-                            }}
-                            tick={{
-                              fontSize: 11,
-                              fill: "rgba(255, 255, 255, 0.7)",
-                            }}
-                            axisLine={{ stroke: "rgba(255, 255, 255, 0.1)" }}
-                            tickLine={{ stroke: "rgba(255, 255, 255, 0.1)" }}
+                          <YAxis 
+                            label={{ value: 'Circulating Supply %', angle: -90, position: 'insideLeft', offset: 10 }}
                           />
-                          <YAxis
-                            label={{
-                              value: "Circulating Supply %",
-                              angle: -90,
-                              position: "insideLeft",
-                              offset: 0,
-                              style: {
-                                fontSize: 11,
-                                fill: "rgba(255, 255, 255, 0.7)",
-                                textAnchor: "middle",
-                              },
-                            }}
-                            domain={[0, 100]}
-                            ticks={[0, 20, 40, 60, 80, 100]}
-                            tickFormatter={(value) => `${value}%`}
-                            tick={{
-                              fontSize: 11,
-                              fill: "rgba(255, 255, 255, 0.7)",
-                            }}
-                            axisLine={{ stroke: "rgba(255, 255, 255, 0.1)" }}
-                            tickLine={{ stroke: "rgba(255, 255, 255, 0.1)" }}
-                          />
-                          <Tooltip
-                            content={({ payload, label }) => {
-                              if (payload && payload[0]) {
-                                return (
-                                  <div className="bg-white rounded-lg p-2 shadow-lg border border-gray-100">
-                                    <div className="text-[#14101b] font-medium">
-                                      Month {label}:{" "}
-                                      {payload[0].value.toFixed(2)}%
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
-                          <Line
-                            type="monotone"
-                            dataKey="percentCirculating"
-                            stroke="white"
-                            strokeWidth={2}
-                            dot={false}
-                            activeDot={{ r: 6, fill: "white" }}
-                          />
-                        </LineChart>
+                          <Tooltip content={<ChartTooltip />} />
+                          {Object.keys(distribution).map((category, index) => (
+                            <Area
+                              key={category}
+                              type="linear"
+                              dataKey={`${category}.percentCirculating`}
+                              stackId="1"
+                              stroke={COLORS[index % COLORS.length]}
+                              fill={COLORS[index % COLORS.length]}
+                            />
+                          ))}
+                        </AreaChart>
 
                         <div className="text-xs text-gray-400 mt-6 w-full px-4">
                           <div className="font-medium mb-2">Key Points:</div>
