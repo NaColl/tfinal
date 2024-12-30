@@ -1,0 +1,7 @@
+2024-12-07T18:45:23.264Z Error: Invalid credentials provided.
+2024-12-07T18:45:23.264Z Error ID: unauthorized
+2024-12-07T18:45:23.264Z     at Login.login (/nix/store/pcwcjrj8x7y6kkdnwhyi9hpx45dxp37s-heroku-8.11.5/share/heroku/node_modules/@heroku-cli/command/lib/login.js:79:19)
+2024-12-07T18:45:23.264Z     at async Login.run (/nix/store/pcwcjrj8x7y6kkdnwhyi9hpx45dxp37s-heroku-8.11.5/share/heroku/lib/commands/auth/login.js:11:9)
+2024-12-07T18:45:23.264Z     at async Login._run (/nix/store/pcwcjrj8x7y6kkdnwhyi9hpx45dxp37s-heroku-8.11.5/share/heroku/node_modules/@oclif/core/lib/command.js:117:22)
+2024-12-07T18:45:23.264Z     at async Config.runCommand (/nix/store/pcwcjrj8x7y6kkdnwhyi9hpx45dxp37s-heroku-8.11.5/share/heroku/node_modules/@oclif/core/lib/config/config.js:329:25)
+2024-12-07T18:45:23.264Z     at async Object.run (/nix/store/pcwcjrj8x7y6kkdnwhyi9hpx45dxp37s-heroku-8.11.5/share/heroku/node_modules/@oclif/core/lib/main.js:89:16)

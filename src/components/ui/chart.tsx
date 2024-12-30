@@ -1,4 +1,4 @@
-import { ChartTooltipProps } from "recharts/types/component/Tooltip"
+import { TooltipProps } from "recharts/types/component/Tooltip"
 
 export interface ChartConfig {
   [key: string]: {
@@ -23,13 +23,13 @@ export function ChartContainer({
   )
 }
 
-export function ChartTooltip({
-  children,
-  ...props
-}: ChartTooltipProps<any, any>) {
+export const ChartTooltip: React.FC<TooltipProps<any, any> & { children?: React.ReactNode }> = (props) => {
+  const { content, children, ...divProps } = props;
+  const tooltipContent = typeof content === 'function' ? content(props) : content;
+
   return (
-    <div className="rounded-lg border bg-white p-2 shadow-sm">
-      {children}
+    <div className="rounded-lg border border-gray-300 bg-gray-100 p-4 shadow-lg text-gray-800" {...divProps}>
+      {tooltipContent || children}
     </div>
-  )
+  );
 }

@@ -90,54 +90,55 @@ const TokenomicsPlanner = () => {
     const days = 48 * 30; // Convert months to days
     const schedule = Array.from({ length: days + 1 }, (_, day) => ({
       day,
-      circulating: 0,
-      rawCirculating: 0,
       ...Object.fromEntries(
         Object.keys(distribution).map((category) => [
           category,
-          { circulating: 0, rawCirculating: 0 },
+          { circulating: 0 },
         ]),
       ),
     }));
 
+    // Calculate unlocks for each category
     Object.entries(distribution).forEach(([category, data]) => {
       const tokenAmount = Math.floor((totalSupply * data.percentage) / 100);
       const tgeAmount = Math.floor((tokenAmount * data.tge) / 100);
       const remainingAmount = tokenAmount - tgeAmount;
-
       const daysInVesting = data.duration * 30; // Convert months to days
-      const dailyUnlock =
-        daysInVesting > 0 ? remainingAmount / daysInVesting : 0;
+      const dailyUnlock = daysInVesting > 0 ? remainingAmount / daysInVesting : 0;
 
-      schedule[0].rawCirculating += tgeAmount;
-      schedule[0][category].rawCirculating += tgeAmount;
-
-      if (daysInVesting > 0) {
-        for (let day = 1; day <= daysInVesting; day++) {
-          schedule[day].rawCirculating += dailyUnlock;
-          schedule[day][category].rawCirculating += dailyUnlock;
+      // Set TGE amount
+      schedule[0][category].circulating = tgeAmount;
+      
+      // Calculate daily unlocks with linear vesting
+      let categoryTotal = tgeAmount;
+      for (let day = 1; day <= days; day++) {
+        if (day <= daysInVesting) {
+          // Add daily unlock amount during vesting period
+          categoryTotal = tgeAmount + (remainingAmount * day / daysInVesting);
+        } else {
+          // After vesting period, all tokens are unlocked
+          categoryTotal = tokenAmount;
         }
+        schedule[day][category].circulating = Math.min(categoryTotal, tokenAmount);
       }
     });
 
-    let cumulative = 0;
+    // Calculate total circulating supply for each day
     return schedule.map((point) => {
-      cumulative += point.rawCirculating;
-      const actualCirculating = Math.min(cumulative, totalSupply);
+      const totalCirculating = Object.entries(distribution).reduce((sum, [category]) => {
+        return sum + point[category].circulating;
+      }, 0);
+
       return {
         day: point.day,
-        circulating: actualCirculating,
-        percentCirculating: (actualCirculating / totalSupply) * 100,
+        circulating: Math.min(totalCirculating, totalSupply),
+        percentCirculating: Math.min((totalCirculating / totalSupply) * 100, 100),
         ...Object.fromEntries(
           Object.keys(distribution).map((category) => [
             category,
             {
-              circulating: Math.min(
-                point[category].rawCirculating,
-                totalSupply,
-              ),
-              percentCirculating:
-                (point[category].rawCirculating / totalSupply) * 100,
+              circulating: point[category].circulating,
+              percentCirculating: (point[category].circulating / totalSupply) * 100,
             },
           ]),
         ),
@@ -274,6 +275,29 @@ const TokenomicsPlanner = () => {
 
   const metrics = calculateMetrics();
   const unlockSchedule = generateUnlockSchedule();
+
+  const CustomTooltip = ({ active, payload }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div
+          style={{
+            backgroundColor: '#2a2333',
+            border: '1px solid rgba(255, 255, 255, 0.1)',
+            padding: '12px',
+            borderRadius: '8px',
+            color: '#fff',
+            fontSize: '14px',
+            fontWeight: 500,
+          }}
+        >
+          <span>
+            {payload[0].name}: {payload[0].value.toFixed(1)}%
+          </span>
+        </div>
+      );
+    }
+    return null;
+  };
 
   return (
     <div className="w-full max-w-7xl mx-auto p-4 space-y-6 bg-[#14101b] text-white">
@@ -585,21 +609,7 @@ const TokenomicsPlanner = () => {
                               />
                             ))}
                           </Pie>
-                          <Tooltip
-                            content={({ payload }) => {
-                              if (payload && payload.length > 0) {
-                                return (
-                                  <div className="bg-white rounded-lg p-2 shadow-lg border border-gray-100">
-                                    <div className="text-[#14101b] font-medium">
-                                      {payload[0].name}:{" "}
-                                      {payload[0].value ? Number(payload[0].value).toFixed(1) : 'N/A'}%
-                                    </div>
-                                  </div>
-                                );
-                              }
-                              return null;
-                            }}
-                          />
+                          <Tooltip content={CustomTooltip} />
                           <Legend
                             layout="vertical"
                             align="right"
@@ -628,28 +638,80 @@ const TokenomicsPlanner = () => {
                         <AreaChart
                           width={500}
                           height={350}
-                          data={unlockSchedule}
-                          margin={{ top: 10, right: 30, left: 0, bottom: 0 }}
+                          data={unlockSchedule.filter((_, index) => index % 30 === 0)} // Sample every 30 days
+                          margin={{ top: 20, right: 30, left: 60, bottom: 60 }}
                         >
-                          <CartesianGrid strokeDasharray="3 3" />
+                          <CartesianGrid strokeDasharray="3 3" stroke="#ffffff1a" />
                           <XAxis 
                             dataKey="day" 
-                            label={{ value: 'Days after TGE', position: 'insideBottom', offset: -5 }}
+                            stroke="#fff"
+                            tickFormatter={(value) => (value / 30).toFixed(0)}
+                            label={{ 
+                              value: 'Months After TGE', 
+                              position: 'insideBottom', 
+                              offset: -35,
+                              fill: '#fff'
+                            }}
                           />
                           <YAxis 
-                            label={{ value: 'Circulating Supply %', angle: -90, position: 'insideLeft', offset: 10 }}
+                            label={{ 
+                              value: 'Circulating Supply %', 
+                              angle: -90, 
+                              position: 'insideLeft', 
+                              offset: -15,
+                              fill: '#fff'
+                            }}
+                            stroke="#fff"
+                            domain={[0, 100]}
+                            ticks={[0, 20, 40, 60, 80, 100]}
                           />
-                          <Tooltip content={<ChartTooltip />} />
-                          {Object.keys(distribution).map((category, index) => (
-                            <Area
-                              key={category}
-                              type="linear"
-                              dataKey={`${category}.percentCirculating`}
-                              stackId="1"
-                              stroke={COLORS[index % COLORS.length]}
-                              fill={COLORS[index % COLORS.length]}
-                            />
-                          ))}
+                          <Tooltip 
+                            content={({ active, payload }) => {
+                              if (active && payload && payload.length) {
+                                return (
+                                  <div
+                                    style={{
+                                      backgroundColor: '#2a2333',
+                                      border: '1px solid rgba(255, 255, 255, 0.1)',
+                                      padding: '12px',
+                                      borderRadius: '8px',
+                                      color: '#fff',
+                                      fontSize: '14px',
+                                      fontWeight: 500,
+                                    }}
+                                  >
+                                    <div>Month {(payload[0].payload.day / 30).toFixed(0)}</div>
+                                    {payload.map((entry: any, index: number) => {
+                                      const formattedName = entry.dataKey.replace(/([A-Z])/g, ' $1').trim();
+                                      const name = formattedName.charAt(0).toUpperCase() + formattedName.slice(1).replace('.percent Circulating', '');
+                                      return (
+                                        <div key={index} style={{ color: entry.color }}>
+                                          {name}: {entry.value.toFixed(1)}%
+                                        </div>
+                                      );
+                                    })}
+                                  </div>
+                                );
+                              }
+                              return null;
+                            }}
+                          />
+                          {Object.entries(distribution).map(([category], index) => {
+                            const formattedName = category.replace(/([A-Z])/g, ' $1').trim();
+                            const name = formattedName.charAt(0).toUpperCase() + formattedName.slice(1).replace('.percent Circulating', '');
+                            return (
+                              <Area
+                                key={category}
+                                type="monotone"
+                                dataKey={`${category}.percentCirculating`}
+                                name={name}
+                                stackId="1"
+                                stroke={COLORS[index % COLORS.length]}
+                                fill={COLORS[index % COLORS.length]}
+                                fillOpacity={0.8}
+                              />
+                            );
+                          })}
                         </AreaChart>
 
                         <div className="text-xs text-gray-400 mt-6 w-full px-4">
