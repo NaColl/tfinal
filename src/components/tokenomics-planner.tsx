@@ -315,7 +315,7 @@ const TokenomicsPlanner = () => {
                 className="w-24 h-24 object-contain"
               />
               <div className="text-sm text-gray-400">
-                Built by The Naked Collector
+                Built by NC Analytics
               </div>
             </div>
           </CardTitle>
